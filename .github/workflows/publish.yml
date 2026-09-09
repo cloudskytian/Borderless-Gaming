@@ -2,9 +2,7 @@ name: publish Borderless Gaming
 
 
 on:
-  push:
-    tags:
-      - "*.*.*"
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -23,38 +21,33 @@ jobs:
           dotnet-version: "8.0.x" # SDK Version to use; x will use the latest version of the 7.0 channel
           include-prerelease: true
 
+      # - name: Install bebopc
+      #   shell: pwsh
+      #   run: $version = '2.7.4'; $script = irm "https://bebop.sh"; & ([scriptblock]::Create($script)) -bebopcVersion $version
+
       - name: Install bebopc
         shell: pwsh
-        run: $version = '2.7.4'; $script = irm "https://bebop.sh"; & ([scriptblock]::Create($script)) -bebopcVersion $version
+        run: |
+          $version = '2.7.4'
+          $script = irm "https://bebop.sh"
+          & ([scriptblock]::Create($script)) -bebopcVersion $version
+          
+          $paths = ($env:PATH -split ';') + ([Environment]::GetEnvironmentVariable("PATH", "User") -split ';')
+          $bebopPaths = $paths | Where-Object { $_ -match 'bebop' } | Select-Object -Unique
+          foreach ($path in $bebopPaths) {
+              Add-Content -Path $env:GITHUB_PATH -Value $path -Encoding utf8
+          }
+          $defaultPath = Join-Path $env:USERPROFILE ".bebop\bin"
+          if (Test-Path $defaultPath) {
+              Add-Content -Path $env:GITHUB_PATH -Value $defaultPath -Encoding utf8
+          }
 
       - name: Build release
         shell: pwsh
         run: ./scripts/build-release.ps1
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: installer
-          path: ./Installers/BorderlessGaming${{ env.RELEASE_VERSION }}_admin_setup.exe
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Borderless Gaming ${{ github.ref }}
-          draft: false
-          prerelease: false
-
-      - name: Upload installer
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./Installers/BorderlessGaming${{ env.RELEASE_VERSION }}_admin_setup.exe
-          asset_name: installer-win64.exe
-          asset_content_type: application/octet-stream
-        
+          path: ./Installers/*.exe
